@@ -136,14 +136,10 @@ class MT_Handler(TouchPadState):
         os.system('clear')
         self.timestamp = event.timestamp()
         self.update_internal_state_syn_report()
-        
+
         output_event_list = self.mouse_output_stack.check_for_event(self)
-        print(output_event_list)
-        #Retval is going to be a list of output mouse events
-        #that need to be sent out
-        if output_event_list:
-            for output_event in output_event_list:
-                self.output_event_queue.put_nowait(output_event)
+        for output_event in output_event_list:
+            self.output_event_queue.put_nowait(output_event)
                     
         self.reset_for_next_syn_report()
         print(self)

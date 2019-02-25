@@ -19,35 +19,54 @@ class MouseOutputStack(object):
     def __init__(self):
         self.drag_active = False
 
-    #Expected of this event to return a list of mouse events to be output
+    #A single event is ('name_of_function_in_sendusb_event_class',*args)
+    #Expected of this event to return:
+    #A list of mouse events to be output [event1,event2...]
+    #An event is as specified previously
+    #If there is nothing to do, it should still atleast output []
     def check_for_event(self,cts):
+        output_event_s = None
         if cts.tracking_id_flag:
-            return self.tracking_id_event(cts)
-        if cts.movement_flag:
-            return self.movement_event(cts)
+            output_event_s = self.tracking_id_event(cts)
+
+        #To keep things simple, no need to check for movement
+        #if there is a change in tracking ids
+        elif cts.movement_flag:
+            output_event_s = self.movement_event(cts)
             
+        if output_event_s: #Because this can be None
+            if type(output_event_s) == tuple:
+                #This is a single event
+                return [output_event_s]
+            else:
+                return output_event_s
+                #Then this must be a list of events
+                
+        return []
+    
+
     def movement_event(self,cts):
         a = self.check_n_tap_movement(cts)
         if a is not None:
             (n,delx,dely) = a
             print(a)
             if n == 1:
-                return [('move_mouse',int(delx),int(dely))]
+                return ('move_mouse',int(delx),int(dely))
             if n == 2:
-                return [('scroll_mouse',int(delx),int(dely))]
+                return ('scroll_mouse',int(delx),int(dely))
             if n == 3:
                 if self.drag_active:
-                    return [('move_mouse',int(delx),int(dely))]
+                    return ('move_mouse',int(delx),int(dely))
                 else:
                     self.drag_active = True
                     return [('press_button',1,),\
                     ('move_mouse',int(delx),int(dely))]
 
             if n == 4:
-                return [('four_mouse',)]
+                return ('four_mouse',)
             
             if n == 5:
-                return [('five_mouse',)]
+                return ('five_mouse',)
             
         
     #Helper method does not return events
@@ -69,11 +88,10 @@ class MouseOutputStack(object):
     def tracking_id_event(self,cts):
         if self.drag_active:
             self.drag_active = False
-            return [('release_button',1,)]
-        
-        a = self.check_for_tap_event(cts) 
-        if a:
-            return [a]
+            return ('release_button',1,)
+        else:
+            return self.check_for_tap_event(cts)
+
         
     #Helper Function
     def check_for_tap_event(self,cts):
