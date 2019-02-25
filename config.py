@@ -3,6 +3,7 @@ tap_timings = {
     2 : 100,
     3 : 150,
     4 : 180,
+    5:  250,
 }
 
 # These numbers mean the number of millseconds the gesture must be

@@ -1,3 +1,5 @@
+#deprecated by mouseoutputstack.py #
+
 from config import tap_timings
 from sendusbevents import SendUsbEvents
 
@@ -17,3 +19,8 @@ def check_single_tap_movement(cts):
             return SendUsbEvents.move_mouse_queue_object(delx,dely)
             #print("Single Tap Movement:X %d,Y %d"%(delx,dely))
     #Make sure that the number of touches is the same as it was
+
+    
+
+
+    

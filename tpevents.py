@@ -5,23 +5,23 @@ from evdev_helper import get_apple_touchpad
 from fingerposition import FingerPosition
 from touchpadstate import TouchPadState
 from tapevents import check_for_tap_event
-from singletapmovement import check_single_tap_movement
+#from singletapmovement import check_single_tap_movement
+#from multimovement import check_multi_movement
 from sendusbevents import SendUsbEvents
+from mouseoutputstack import MouseOutputStack
 #1. Expects a SYN_REPORT between two touch events
 #2. If there are more than one fingers on the pad MT_SLOT is reported,
 #   otherwise, it doesn't report MT_SLOT
 
 class MT_Handler(TouchPadState):
-    def __init__(self,output_event_queue):
+    def __init__(self,output_event_queue,mouse_output_stack):
         super().__init__()
         
         #The following variables hold state variables
         #for understanding sequential events
+        self.mouse_output_stack = mouse_output_stack
         self.output_event_queue = output_event_queue
         self.slot_for_next_report = 0
-        self.tracking_id_flag = 0
-        self.movement_flag = 0
-        self.event_list = []
         #This Flag is set when there is a change in the number of tracking ids
         
         self.handler_dict_abs = {
@@ -70,18 +70,7 @@ class MT_Handler(TouchPadState):
 
     def process_event(self,event):
         self.handler_dict[event.type][event.code](event)
-        
-    def __repr__(self):
-        slot_text = '\n'.join([str(i) for i in self.slots])
-        active_touches = 'Active Touches: %d'%(self.number_of_active_touch)
-        events = 'Events: '+','.join(self.event_list)
-        return '\n'.join([slot_text,active_touches,events]) 
-    
-    #EVENT Handling functions
-    def check_and_queue_event(self,event):
-        if event is not None:
-            self.output_event_queue.put_nowait(event)
-    
+                    
     def abs_mt_slot(self,event):
         self.slot_for_next_report = event.value
         #print(event)
@@ -104,11 +93,11 @@ class MT_Handler(TouchPadState):
         
     def abs_mt_position_x(self,event):
         self.slots[self.slot_for_next_report].abs_x = event.value 
-        self.movement_flag = 1
+        self.movement_flag = True
         
     def abs_mt_position_y(self,event):
         self.slots[self.slot_for_next_report].abs_y = event.value
-        self.movement_flag = 1
+        self.movement_flag = True
         
     def abs_mt_tool_type(self,event):
         pass
@@ -117,7 +106,7 @@ class MT_Handler(TouchPadState):
         pass
     
     def abs_mt_tracking_id(self,event):
-        self.tracking_id_flag = 1
+        self.tracking_id_flag = True
         if (event.value == -1):
             self.slots[self.slot_for_next_report].touch = 0
         else:
@@ -137,27 +126,27 @@ class MT_Handler(TouchPadState):
     def abs_mt_tool_y(self,event):
         pass
 
+    #This is the event that ties everything together
+    #In other words, when this is received we
+    # 1. Update the trackpad state with all the information we've received
+    # 2. See if that requires us to send out any mouse events
+    # 3. Prepare for receiving the next SYN event, whenever that will happen
+    
     def syn_report(self,event):
         os.system('clear')
-        
         self.timestamp = event.timestamp()
         self.update_internal_state_syn_report()
-
+        
+        output_event_list = self.mouse_output_stack.check_for_event(self)
+        print(output_event_list)
+        #Retval is going to be a list of output mouse events
+        #that need to be sent out
+        if output_event_list:
+            for output_event in output_event_list:
+                self.output_event_queue.put_nowait(output_event)
+                    
+        self.reset_for_next_syn_report()
         print(self)
-
-        if self.tracking_id_flag == 1:
-            #This means that the number of fingers
-            #on the touchpad has changed
-            #Check on all events that depend on this kinda thing
-            #Basically all events
-            self.check_and_queue_event(check_for_tap_event(self))
-            
-        if self.movement_flag == 1:
-            self.check_and_queue_event(check_single_tap_movement(self))
-            
-        self.save_last_state()
-        print(self.__repr_tap_chain__())
-            
         
     def btn_tool_quinttap(self,event):
         pass
@@ -203,7 +192,8 @@ class MT_Handler(TouchPadState):
     
 if __name__ == '__main__':
     async def touchpad_helper(event_queue):
-        handler = MT_Handler(event_queue)
+        mouse_output = MouseOutputStack()
+        handler = MT_Handler(event_queue,mouse_output)
         touchpad = get_apple_touchpad()
         touchpad.grab()
         
@@ -222,10 +212,10 @@ if __name__ == '__main__':
             evt_log.write("Opened Event Log at:%s\n"%datetime.datetime.now())
         while True:
             event = await event_queue.get()
-            event(sobj)
-            with open('evt_log','w') as evt_log: 
-                evt_log.write("Event: %s\n"%event)
-
+            with open('evt_log','a+') as evt_log: 
+                evt_log.write("Event: %s\n"%repr(event))
+            sobj.do(*event)
+            
 
     #The following code is suitable for Python-3.7 asyncio
     async def main():

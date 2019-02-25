@@ -1,3 +1,5 @@
+#deprecated by mouseoutputstack.py #
+
 #From the chain of taps on the touchpad,
 #this will check if the timing indeed matches what
 #it needs to be for a single tap, double tap, etc
@@ -31,8 +33,7 @@ def check_for_tap_event(cts):
         delta_t *= 1000
         print("Gesture Length: %f, Num:%d"%(delta_t,max_tap))
         if delta_t < tap_timings[max_tap]:
-            #return {'type':'TapRelease','num':max_tap}
-            return SendUsbEvents.tap_click_queue_object(max_tap)
+            return ('tap_click', max_tap)
             #This is a good gesture! Let us report an event
 
 
