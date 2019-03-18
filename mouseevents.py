@@ -10,9 +10,9 @@ from evdev_device_mappings import *
 from sendusbevents import SendUsbEvents
 from mouseoutputstack import MouseOutputStack
 from collections import defaultdict
-import csv
+btn_config_filename = 'btn_config'
+from tabulate import tabulate
 
-    
 class MouseEventHandler(object):
     def __init__(self,sendUsbEvents):
         super().__init__()
@@ -27,6 +27,7 @@ class MouseEventHandler(object):
         self.btn_mask_byte = 0
         self.btn_flag = 0
         self.rel_movement_flag = 0
+        self.rel_wheel_flag = 0
 
         #This Flag is set when there is a change in the number of tracking ids
         
@@ -61,15 +62,39 @@ class MouseEventHandler(object):
             evdev.ecodes.EV_MSC : self.handler_dict_msc,
         }
 
+        self.btn_dict_movement = {}
+        self.btn_dict_press_release = {}
+        self.btn_dict_wheel = {}
+
+        self.read_btn_config()
+
     def read_btn_config(self):
         expected_count = 6
-        with open('btn_config','r',newline='') as f:
-            reader = csv.reader((line for line in f if line[0]!= '#') ,delimiter='\t',skipinitialspace=True)
+        btn_config_token_list = None
+        with open(btn_config_filename,'r',newline='') as f:
             output = []
-            for row in reader:
-                output.append([i.strip() for i in row if i != ''])
+            for line in f:
+                if line.startswith('#'):
+                    continue #Ignore comments, like this one here :)
+                output.append(line.split())
             output = [i for i in output if i != []]
-            print(output)
+            print(tabulate(output))
+            btn_config_token_list = output
+
+        for line in btn_config_token_list:
+            print(line)
+            [btn_dict_key,movement_handler,wheel_handler,press_release_handler] = line
+            btn_dict_key = eval(btn_dict_key)
+            self.btn_dict_movement[btn_dict_key] = eval('self.'+movement_handler)
+            self.btn_dict_wheel[btn_dict_key] = eval('self.'+wheel_handler)
+            self.btn_dict_press_release[btn_dict_key] = eval('self.'+press_release_handler)
+
+        print("Loaded Button Configuration Successfully.")
+
+    def note_on(self,note):
+        def helperfunction(self):
+            self.sendUsbEvents.midi_note_on(note,127)
+        return helperfunction
 
     def cc_xy(self,cc_value_x,cc_value_y):
         def helperfunction(x,y):
@@ -78,7 +103,7 @@ class MouseEventHandler(object):
         return helperfunction
 
     def cc_whl(self,cc_value):
-        def helpferfunction(whl):
+        def helperfunction(whl):
             self.sendUsbEvents.midi_cc(cc_value,whl)
         return helperfunction
 
@@ -89,12 +114,13 @@ class MouseEventHandler(object):
 
     def report_scroll(self):
         def helperfunction(whl):
-            self.sendUsbEvents.<Report scroll>
+            self.sendUsbEvents.scroll_mouse(whl,0)
         return helperfunction
     
-    
-    def do_nothing(self,event):
-        pass
+    def do_nothing(self):
+        def helperfunction():
+            pass
+        return helperfunction
     
     def process_mouse_event(self,event):
         try:
@@ -105,11 +131,14 @@ class MouseEventHandler(object):
             print(event)
 
     def process_keyboard_event(self,event):
-        if (event.value):
-            self.pressed_key = event.code
-            
-            print("Event Cat:",evdev.categorize(event))
-            print(event)
+        if event.type == 1:
+            #print("Event Cat:",evdev.categorize(event))
+            #print(event)
+            if event.value == 1: #Key Down
+                self.pressed_button = event.code
+            if event.value == 0: #Key Up
+                self.pressed_button = None
+            #print("Pressed Key ",self.pressed_key)
             
     #This is the event that ties everything together
     #In other words, when this is received we
@@ -160,12 +189,15 @@ class MouseEventHandler(object):
         if self.btn_flag:
             self.sendUsbEvents.button_state((self.btn_mask_byte|0b10000000))
             self.btn_flag = False
+
+        if self.rel_movement_flag:
+            print(self.pressed_button)
+            self.btn_dict_movement[self.pressed_button](self.rel_x_value,self.rel_y_value)
+            self.rel_movement_flag = False
             
-        if self.pressed_button == None:
-            if self.rel_x_value != 0 or self.rel_y_value != 0:
-                self.sendUsbEvents.move_mouse(int(self.rel_x_value/fast_factor),int(self.rel_y_value/fast_factor))
-            if self.rel_wheel_value != 0:
-                self.sendUsbEvents.scroll_mouse(self.rel_wheel_value,0)
+        if self.rel_wheel_flag:
+            self.btn_dict_wheel[self.pressed_button](self.rel_wheel_value)
+            self.rel_wheel_flag = False
                
         self.rel_x_value = 0
         self.rel_y_value = 0

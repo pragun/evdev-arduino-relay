@@ -35,6 +35,11 @@ class SendUsbEvents(object):
         arr2 = [ord('a')]+arr+[ord('\n')]
         print(binascii.hexlify(bytes(arr2)))
         self.ser.write(bytes(arr2))
+
+    def send_as_midi(self,arr):
+        arr2 = [ord('c')]+arr+[ord('\n')]
+        print(binascii.hexlify(bytes(arr2)))
+        self.ser.write(bytes(arr2))
         
     def tap_click(self,num):
         tap_byte = 0b00000001 << (num-1)
@@ -61,6 +66,16 @@ class SendUsbEvents(object):
             y=256-abs(y)
         arr = [0,0,0,x,y]
         self.send_as_mouse(arr)
+
+    def midi_cc(self,cc_value,value,channel=0):
+        print('midi_cc',cc_value,value)
+        if value<0:
+            value=127-abs(value)
+        assert value<=127, "Midi CC Value exceeds 127"
+        assert cc_value <= 127, "MIDi CC Control Number exceeds 127"
+        status_byte = 0b10110000 | channel
+        arr = [0b00001011,status_byte,cc_value,value]
+        self.send_as_midi(arr)
 
     def three_mouse(self):
         pass
