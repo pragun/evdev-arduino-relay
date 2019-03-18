@@ -68,7 +68,7 @@ class SendUsbEvents(object):
         self.send_as_mouse(arr)
 
     def midi_cc(self,cc_value,value,channel=0):
-        print('midi_cc',cc_value,value)
+        #print('midi_cc',cc_value,value)
         if value<0:
             value=127-abs(value)
         assert value<=127, "Midi CC Value exceeds 127"
@@ -76,6 +76,21 @@ class SendUsbEvents(object):
         status_byte = 0b10110000 | channel
         arr = [0b00001011,status_byte,cc_value,value]
         self.send_as_midi(arr)
+
+    def midi_note_off(self,note_number,velocity,channel=0):
+        assert velocity<=127, "Midi Velocity exceeds 127"
+        assert note_number <= 127, "MIDi Note Number exceeds 127"
+        status_byte = 0b10000000 | channel
+        arr = [0b00001000,status_byte,cc_value,value]
+        self.send_as_midi(arr)
+
+    def midi_note_on(self,note_number,velocity,channel=0):
+        assert velocity<=127, "Midi Velocity exceeds 127"
+        assert note_number <= 127, "MIDi Note Number exceeds 127"
+        status_byte = 0b10010000 | channel
+        arr = [0b00001001,status_byte,cc_value,value]
+        self.send_as_midi(arr)
+        
 
     def three_mouse(self):
         pass

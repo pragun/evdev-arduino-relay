@@ -10,7 +10,7 @@ from evdev_device_mappings import *
 from sendusbevents import SendUsbEvents
 from mouseoutputstack import MouseOutputStack
 from collections import defaultdict
-btn_config_filename = 'btn_config'
+key_config_filename = 'key_config'
 from tabulate import tabulate
 
 class MouseEventHandler(object):
@@ -28,7 +28,10 @@ class MouseEventHandler(object):
         self.btn_flag = 0
         self.rel_movement_flag = 0
         self.rel_wheel_flag = 0
-
+        
+        self.key_press_report_count = 0
+        self.key_up_flag = 0
+        
         #This Flag is set when there is a change in the number of tracking ids
         
         self.handler_dict_abs = {
@@ -62,16 +65,15 @@ class MouseEventHandler(object):
             evdev.ecodes.EV_MSC : self.handler_dict_msc,
         }
 
-        self.btn_dict_movement = {}
-        self.btn_dict_press_release = {}
-        self.btn_dict_wheel = {}
+        self.key_dict_movement = {}
+        self.key_dict_press_release = {}
+        self.key_dict_wheel = {}
 
-        self.read_btn_config()
+        self.read_key_config()
 
-    def read_btn_config(self):
-        expected_count = 6
-        btn_config_token_list = None
-        with open(btn_config_filename,'r',newline='') as f:
+    def read_key_config(self):
+        key_config_token_list = None
+        with open(key_config_filename,'r',newline='') as f:
             output = []
             for line in f:
                 if line.startswith('#'):
@@ -79,17 +81,17 @@ class MouseEventHandler(object):
                 output.append(line.split())
             output = [i for i in output if i != []]
             print(tabulate(output))
-            btn_config_token_list = output
+            key_config_token_list = output
 
-        for line in btn_config_token_list:
+        for line in key_config_token_list:
             print(line)
-            [btn_dict_key,movement_handler,wheel_handler,press_release_handler] = line
-            btn_dict_key = eval(btn_dict_key)
-            self.btn_dict_movement[btn_dict_key] = eval('self.'+movement_handler)
-            self.btn_dict_wheel[btn_dict_key] = eval('self.'+wheel_handler)
-            self.btn_dict_press_release[btn_dict_key] = eval('self.'+press_release_handler)
+            [key_dict_key,movement_handler,wheel_handler,press_release_handler] = line
+            key_dict_key = eval(btn_dict_key)
+            self.key_dict_movement[btn_dict_key] = eval('self.'+movement_handler)
+            self.key_dict_wheel[btn_dict_key] = eval('self.'+wheel_handler)
+            self.key_dict_press_release[btn_dict_key] = eval('self.'+press_release_handler)
 
-        print("Loaded Button Configuration Successfully.")
+        print("Loaded Key Configuration Successfully.")
 
     def note_on(self,note):
         def helperfunction(self):
@@ -135,9 +137,14 @@ class MouseEventHandler(object):
             #print("Event Cat:",evdev.categorize(event))
             #print(event)
             if event.value == 1: #Key Down
-                self.pressed_button = event.code
+                self.pressed_key = event.code
+                self.key_press_report_count = 0
+                
             if event.value == 0: #Key Up
-                self.pressed_button = None
+                self.key_flag = True
+                self.last_pressed_key = self.pressed_button
+                self.pressed_key = None
+                
             #print("Pressed Key ",self.pressed_key)
             
     #This is the event that ties everything together
@@ -192,12 +199,17 @@ class MouseEventHandler(object):
 
         if self.rel_movement_flag:
             print(self.pressed_button)
-            self.btn_dict_movement[self.pressed_button](self.rel_x_value,self.rel_y_value)
+            self.key_dict_movement[self.pressed_key](self.rel_x_value,self.rel_y_value)
             self.rel_movement_flag = False
             
         if self.rel_wheel_flag:
-            self.btn_dict_wheel[self.pressed_button](self.rel_wheel_value)
+            self.key_dict_wheel[self.pressed_key](self.rel_wheel_value)
             self.rel_wheel_flag = False
+
+        if self.key_up_flag:
+            if self.key_press_report_count = 0:
+                self.key_dict_press_release[self.last_pressed_key]()
+            self.key_up_flag = False
                
         self.rel_x_value = 0
         self.rel_y_value = 0
