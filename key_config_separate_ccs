@@ -1,6 +1,8 @@
 #Legend
+#This is one of the example config files that sends out mouse movement on different CC values, if needed
 #What functions to call when some button is pressed on the mouse
 #Which button?	   	     #ReportX,Y	    	    	#ReportWhl	#OnlyKeypress
+
 
 None 		   	     report_movement(2)	    	report_scroll()	do_nothing()		
 evdev.ecodes.KEY_1 	     cc_xy(0,1)		    	cc_whl(2)	note_on(0)

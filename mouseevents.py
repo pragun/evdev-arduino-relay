@@ -12,6 +12,12 @@ from mouseoutputstack import MouseOutputStack
 from collections import defaultdict
 key_config_filename = 'key_config'
 from tabulate import tabulate
+import math
+import arduino_keys
+
+wait_num_reports = 2
+
+sign = lambda x: (1, -1)[x<0]
 
 class MouseEventHandler(object):
     def __init__(self,sendUsbEvents):
@@ -20,7 +26,6 @@ class MouseEventHandler(object):
         #The following variables hold state variables
         #for understanding sequential events
         self.sendUsbEvents = sendUsbEvents
-        self.pressed_button = None
         self.rel_x_value = 0
         self.rel_y_value = 0
         self.rel_wheel_value = 0
@@ -29,8 +34,14 @@ class MouseEventHandler(object):
         self.rel_movement_flag = 0
         self.rel_wheel_flag = 0
         
-        self.key_press_report_count = 0
-        self.key_up_flag = 0
+        self.pressed_key = None
+        self.last_pressed_key = None
+
+        #This little guy can be used by a movement reporting function
+        #such as 'std_cc_xy' to save a tuple
+        #containing the integrated distance travelled since the last click
+        #or the initial position of the X,Y click
+        self.movement_last_reported_state = None
         
         #This Flag is set when there is a change in the number of tracking ids
         
@@ -86,32 +97,143 @@ class MouseEventHandler(object):
         for line in key_config_token_list:
             print(line)
             [key_dict_key,movement_handler,wheel_handler,press_release_handler] = line
-            key_dict_key = eval(btn_dict_key)
-            self.key_dict_movement[btn_dict_key] = eval('self.'+movement_handler)
-            self.key_dict_wheel[btn_dict_key] = eval('self.'+wheel_handler)
-            self.key_dict_press_release[btn_dict_key] = eval('self.'+press_release_handler)
+            key_dict_key = eval(key_dict_key)
+            self.key_dict_movement[key_dict_key] = eval('self.'+movement_handler)
+            self.key_dict_wheel[key_dict_key] = eval('self.'+wheel_handler)
+            self.key_dict_press_release[key_dict_key] = eval('self.'+press_release_handler)
 
         print("Loaded Key Configuration Successfully.")
 
-    def note_on(self,note):
-        def helperfunction(self):
-            self.sendUsbEvents.midi_note_on(note,127)
+#All of these here, till #end_of_config functions
+#can be used in the key_config file to denote
+#what should happen if the keys are pressed and released
+#and if the mouse is moved when the keys are pressed
+    def note_on_off(self,note):
+        def helperfunction(key_up_down_value):
+            if key_up_down_value == 1:
+                self.sendUsbEvents.midi_note_on(note,127)
+            if key_up_down_value == 0:
+                self.sendUsbEvents.midi_note_off(note,127)
+        return helperfunction                
+    
+    def std_cc_xy(self):
+        def helperfunction(x,y,last_state):
+            if last_state == None:
+                return wait_num_reports #wait_num_reports
+            if type(last_state) == int and last_state > 0:
+                return last_state - 1            
+            #This scheme up here helps us ignore
+            #'wait_num_reports' number of movement reports
+            #right after a key-press as kind of a simple
+            #movement_debouncing_mechanism
+            
+            if type(last_state) == int and last_state == 0:
+                last_state = (0,0) #[Integrated distance, total delX, delY since beginning of gesture]
+
+            x = min(x,63) if x>0 else max(x,-63)
+            y = min(y,63) if y>0 else max(y,-63)
+            self.sendUsbEvents.midi_cc(1,x)
+            self.sendUsbEvents.midi_cc(2,y)
+            (rx,ry) = last_state
+            new_rx = rx+x
+            new_ry = ry+y
+            del_r = int(math.sqrt(new_rx**2+new_ry**2)-math.sqrt(rx**2+ry**2))
+            self.sendUsbEvents.midi_cc(3,del_r)
+            del_d = int(math.sqrt(x**2+y**2))
+            self.sendUsbEvents.midi_cc(4,del_d)
+            return (new_rx,new_ry)
         return helperfunction
 
-    def cc_xy(self,cc_value_x,cc_value_y):
-        def helperfunction(x,y):
-            self.sendUsbEvents.midi_cc(cc_value_x,x)
-            self.sendUsbEvents.midi_cc(cc_value_y,y)
+    
+    def report_xy_as_scroll(self,divisor):
+        def helperfunction(x,y,last_state):
+            #print('X:%d,Y:%d'%(x,y,))
+            if last_state == None:
+                return wait_num_reports
+            if type(last_state) == int and last_state > 0:
+                return last_state - 1            
+            #This scheme up here helps us ignore
+            #'wait_num_reports' number of movement reports
+            #right after a key-press as kind of a simple
+            #movement_debouncing_mechanism
+            
+            if type(last_state) == int and last_state == 0:
+                last_state = (0,0) #[Integrated distance, total delX, delY since beginning of gesture]
+
+            (x_remainder,y_remainder) = last_state
+            x_total = x+x_remainder
+            y_total = y+y_remainder
+            x_remainder = (x_total)%divisor
+            y_remainder = (y_total)%divisor
+            self.sendUsbEvents.scroll_mouse(int(y_total/divisor),int(x_total/divisor))
+            return (x_remainder,y_remainder)
+        
         return helperfunction
 
+    def report_xy_as_cursor(self,divisor):
+        def helperfunction(x,y,last_state):
+            if last_state == None:
+                return wait_num_reports
+            if type(last_state) == int and last_state > 0:
+                return last_state - 1            
+            #This scheme up here helps us ignore
+            #'wait_num_reports' number of movement reports
+            #right after a key-press as kind of a simple
+            #movement_debouncing_mechanism
+            
+            if type(last_state) == int and last_state == 0:
+                last_state = (0,0) #[Integrated distance, total delX, delY since beginning of gesture]
+
+            (x_remainder,y_remainder) = last_state
+            x_total = x+x_remainder
+            y_total = y+y_remainder
+
+            #print('X:%d, Y:%d, Xt:%d,Yt:%d, Xr:%d, Yr:%d'%(x,y,x_total,y_total,x_remainder,y_remainder))
+            
+            x_remainder = sign(x_total)*(abs(x_total)%divisor)
+            y_remainder = sign(y_total)*(abs(y_total)%divisor)
+            x_quot = int(x_total/divisor)
+            y_quot = int(y_total/divisor)
+
+            if x_quot >= 1:
+                self.sendUsbEvents.keyboard_press(arduino_keys.KEY_RIGHT_ARROW)
+                self.sendUsbEvents.keyboard_release(arduino_keys.KEY_RIGHT_ARROW)
+                return (x_remainder,0)
+            
+            if x_quot <= -1:
+                self.sendUsbEvents.keyboard_press(arduino_keys.KEY_LEFT_ARROW)
+                self.sendUsbEvents.keyboard_release(arduino_keys.KEY_LEFT_ARROW)
+                return (x_remainder,0)
+            
+            if y_quot >= 1:
+                self.sendUsbEvents.keyboard_press(arduino_keys.KEY_DOWN_ARROW)
+                self.sendUsbEvents.keyboard_release(arduino_keys.KEY_DOWN_ARROW)
+                return (0,y_remainder)
+            
+            if y_quot <= -1:
+                self.sendUsbEvents.keyboard_press(arduino_keys.KEY_UP_ARROW)
+                self.sendUsbEvents.keyboard_release(arduino_keys.KEY_UP_ARROW)
+                return (0,y_remainder)
+
+            return (x_remainder,y_remainder)
+
+            #print('X:%d,Y:%d,R:%f'%(x,y,x/float(y)))
+        return helperfunction
+
+    def key_press_release(self,key_code,no_movement=True):
+        def helperfunction(key_up_down_value):
+            pass
+        return helperfunction
+    
     def cc_whl(self,cc_value):
         def helperfunction(whl):
             self.sendUsbEvents.midi_cc(cc_value,whl)
         return helperfunction
 
     def report_movement(self,factor):
-        def helperfunction(x,y):
-                self.sendUsbEvents.move_mouse(int(x/factor),int(y/factor))            
+        def helperfunction(x,y,last_state):
+            #print('RM x:%d, y:%d'%(x,y))
+            self.sendUsbEvents.move_mouse(int(x/factor),int(y/factor))            
         return helperfunction
 
     def report_scroll(self):
@@ -119,11 +241,12 @@ class MouseEventHandler(object):
             self.sendUsbEvents.scroll_mouse(whl,0)
         return helperfunction
     
-    def do_nothing(self):
+    def do_nothing(self,*args): #Wu-Wei
         def helperfunction():
             pass
         return helperfunction
-    
+#end_of_key_config_functions
+
     def process_mouse_event(self,event):
         try:
             self.handler_dict[event.type][event.code](event)
@@ -138,14 +261,14 @@ class MouseEventHandler(object):
             #print(event)
             if event.value == 1: #Key Down
                 self.pressed_key = event.code
-                self.key_press_report_count = 0
+                self.movement_last_reported_state = None #This is reset for every new click
+                self.key_dict_press_release[self.pressed_key](event.value)
                 
             if event.value == 0: #Key Up
-                self.key_flag = True
-                self.last_pressed_key = self.pressed_button
+                self.last_pressed_key = self.pressed_key
                 self.pressed_key = None
+                self.key_dict_press_release[self.last_pressed_key](event.value)                    
                 
-            #print("Pressed Key ",self.pressed_key)
             
     #This is the event that ties everything together
     #In other words, when this is received we
@@ -198,19 +321,14 @@ class MouseEventHandler(object):
             self.btn_flag = False
 
         if self.rel_movement_flag:
-            print(self.pressed_button)
-            self.key_dict_movement[self.pressed_key](self.rel_x_value,self.rel_y_value)
+            self.movement_last_reported_state = self.key_dict_movement[self.pressed_key]\
+                (self.rel_x_value,self.rel_y_value,self.movement_last_reported_state)
             self.rel_movement_flag = False
             
         if self.rel_wheel_flag:
             self.key_dict_wheel[self.pressed_key](self.rel_wheel_value)
             self.rel_wheel_flag = False
 
-        if self.key_up_flag:
-            if self.key_press_report_count = 0:
-                self.key_dict_press_release[self.last_pressed_key]()
-            self.key_up_flag = False
-               
         self.rel_x_value = 0
         self.rel_y_value = 0
         self.rel_wheel_value = 0

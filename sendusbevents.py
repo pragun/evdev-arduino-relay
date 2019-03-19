@@ -33,13 +33,29 @@ class SendUsbEvents(object):
             
     def send_as_mouse(self,arr):
         arr2 = [ord('a')]+arr+[ord('\n')]
-        print(binascii.hexlify(bytes(arr2)))
+        #print(binascii.hexlify(bytes(arr2)))
         self.ser.write(bytes(arr2))
 
     def send_as_midi(self,arr):
         arr2 = [ord('c')]+arr+[ord('\n')]
-        print(binascii.hexlify(bytes(arr2)))
+        #print(binascii.hexlify(bytes(arr2)))
         self.ser.write(bytes(arr2))
+
+    def send_as_keyboard(self,arr):
+        arr2 = [ord('b')]+arr+[ord('\n')]
+        self.ser.write(bytes(arr2))
+
+    def keyboard(self,key,press_release):
+        arr = [key,press_release]
+        self.send_as_keyboard(arr)
+
+    def keyboard_press(self,key):
+        arr = [key,1]
+        self.send_as_keyboard(arr)
+
+    def keyboard_release(self,key):
+        arr = [key,0]
+        self.send_as_keyboard(arr)
         
     def tap_click(self,num):
         tap_byte = 0b00000001 << (num-1)
@@ -81,16 +97,15 @@ class SendUsbEvents(object):
         assert velocity<=127, "Midi Velocity exceeds 127"
         assert note_number <= 127, "MIDi Note Number exceeds 127"
         status_byte = 0b10000000 | channel
-        arr = [0b00001000,status_byte,cc_value,value]
+        arr = [0b00001000,status_byte,note_number,velocity]
         self.send_as_midi(arr)
 
     def midi_note_on(self,note_number,velocity,channel=0):
         assert velocity<=127, "Midi Velocity exceeds 127"
         assert note_number <= 127, "MIDi Note Number exceeds 127"
         status_byte = 0b10010000 | channel
-        arr = [0b00001001,status_byte,cc_value,value]
+        arr = [0b00001001,status_byte,note_number,velocity,]
         self.send_as_midi(arr)
-        
 
     def three_mouse(self):
         pass
@@ -115,7 +130,9 @@ if __name__ == '__main__':
     a = SendUsbEvents(dummy=False)
     #a.tap_click(3)
     a.move_mouse(100,100)
-    a.disconnect()
+    a.keyboard_press(97)
+    a.keyboard_release(97)
+    #a.disconnect()
         
 
     
