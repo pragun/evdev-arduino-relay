@@ -3,7 +3,6 @@
 #it needs to be for a single tap, double tap, etc
 #after that it will create an event in the event queue
 
-from config import tap_timings
 from sendusbevents import SendUsbEvents
 
 def FourMouse(a):
