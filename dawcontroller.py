@@ -180,7 +180,7 @@ class MouseEventHandler(object):
             #      %(x,y,x_total,y_total,x_remainder,y_remainder,x_report,y_report))
 
             if (abs(x_report) > 0) or (abs(y_report) > 0):
-                self.sendUsbEvents.scroll_mouse(y_report,x_report)
+                self.sendUsbEvents.scroll_mouse((-1*y_report),x_report)
                 self.number_movement_reports_since_last_key_change += 1
                 
             self.leftover_movement_report_data = (x_remainder,y_remainder)
