@@ -270,7 +270,7 @@ class MouseEventHandler(object):
         return helperfunction
     
     def do_nothing(self,*args): #Wu-Wei
-        def helperfunction():
+        def helperfunction(*args):
             pass
         return helperfunction
 #end_of_key_config_functions
