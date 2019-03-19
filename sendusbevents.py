@@ -1,4 +1,5 @@
 import serial
+import binascii
 
 class SendUsbEvents(object):
     def __init__(self,port='/dev/ttyACM0',speed=1000000,dummy=True):
@@ -32,12 +33,16 @@ class SendUsbEvents(object):
             
     def send_as_mouse(self,arr):
         arr2 = [ord('a')]+arr+[ord('\n')]
-        print(bytes(arr2))
+        print(binascii.hexlify(bytes(arr2)))
         self.ser.write(bytes(arr2))
         
     def tap_click(self,num):
         tap_byte = 0b00000001 << (num-1)
         tap_byte |= 0b10000000
+        arr = [tap_byte,0,0,0,0]
+        self.send_as_mouse(arr)
+
+    def button_state(self,tap_byte):
         arr = [tap_byte,0,0,0,0]
         self.send_as_mouse(arr)
         
@@ -77,8 +82,10 @@ class SendUsbEvents(object):
 
         
 if __name__ == '__main__':
-    a = SendUsbEvents()
-    a.tap_click(3)
-    a.move(100,100)
+    a = SendUsbEvents(dummy=False)
+    #a.tap_click(3)
+    a.move_mouse(100,100)
     a.disconnect()
         
+
+    

@@ -1,11 +1,7 @@
-#This here takes care of 
-# 1. listening to touchpad events
-# 2. Updating touchpad state
-# 3. Runinng gesture recognition 
-# 4. And emitting sendMouse events
-
+#This here takes care of
+#listening to touchpad ev
 import evdev, asyncio, os
-import datetime
+zimport datetime
 
 from evdev_helper import get_apple_touchpad
 from fingerposition import FingerPosition

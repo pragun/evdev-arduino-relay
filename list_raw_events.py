@@ -7,7 +7,7 @@ for i in devices:
 
 print("Selecting device here..")
 
-keyboard = evdev.InputDevice('/dev/input/event5')
+keyboard = evdev.InputDevice('/dev/input/event1')
 print(keyboard.name)
 
 keyboard.grab()
